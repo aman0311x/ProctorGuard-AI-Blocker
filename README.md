@@ -78,3 +78,5 @@ CREATE TABLE logs (
     details text,
     created_at timestamp DEFAULT now()
 );
+
+
