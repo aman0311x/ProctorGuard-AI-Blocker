@@ -1,24 +1,22 @@
 import { useEffect, useState } from 'react'
 import { io } from 'socket.io-client'
 
-// সকেট কানেকশন তৈরি করছি, কিন্তু রুম এ জয়েন হবে পরে
-const socket = io('http://localhost:5000', { autoConnect: false });
+
+const socket = io('https://proctorguard-ai-blocker.onrender.com', { autoConnect: false });
 
 function App() {
   const [logs, setLogs] = useState([])
 
-  // অ্যাপের ভিউ কন্ট্রোল
   const [view, setView] = useState('home') // 'home', 'modal', 'dashboard'
   const [compDetails, setCompDetails] = useState({ name: '', org: '', secretKey: '' })
   const [selectedTeamId, setSelectedTeamId] = useState(null)
   const [loadingLogs, setLoadingLogs] = useState(false);
 
-  // 📥 ডেটাবেস থেকে লগ আনার ফাংশন (এখন এটি 'কোড' দিয়ে ফিল্টার করবে)
   const fetchFilteredLogs = async (contestCode) => {
     setLoadingLogs(true);
     try {
       // http://.../api/logs?code=PRO-XXXX
-      const response = await fetch(`http://localhost:5000/api/logs?code=${contestCode}`)
+      const response = await fetch(`https://proctorguard-ai-blocker.onrender.com/api/logs?code=${contestCode}`)
       const data = await response.json()
       setLogs(data)
     } catch (error) {
@@ -27,20 +25,17 @@ function App() {
     setLoadingLogs(false);
   }
 
-  // 🎲 Random Secret Key তৈরি এবং প্রতিযোগিতা ডাটাবেসে সেভ
   const startCompetition = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
     const name = formData.get('compName');
     const org = formData.get('orgName');
 
-    // 6 ডিজিটের রান্ডম কোড
     const randomHex = Math.random().toString(36).substring(2, 7).toUpperCase();
     const key = `PRO-${randomHex}`;
 
-    // ১. ব্যাকএন্ডে ডেটা পাঠিয়ে প্রতিযোগিতা তৈরি (CREATE)
     try {
-      const response = await fetch('http://localhost:5000/api/create-competition', {
+      const response = await fetch('https://proctorguard-ai-blocker.onrender.com/api/create-competition', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, organizer: org, secret_key: key })
@@ -48,14 +43,11 @@ function App() {
       const compData = await response.json();
       console.log("Competition created:", compData);
 
-      // ২. স্টেট আপডেট এবং ড্যাশবোর্ড ভিউ তে যাওয়া
       setCompDetails({ name, org, secretKey: key });
       setView('dashboard');
 
-      // ৩. এই কোডের জন্য পুরোনো লগ টেনে আনা
       fetchFilteredLogs(key);
 
-      // ৪. Socket.io রুম এ জয়েন করা (লাইভ ডেটা পাওয়ার জন্য)
       socket.connect();
       socket.emit('join_competition', key);
 
@@ -65,14 +57,11 @@ function App() {
     }
   }
 
-  // 🔄 যখনই ড্যাশবোর্ড ভিউ এ থাকা অবস্থায় নতুন লগ আসবে, সেটা যুক্ত হবে
   useEffect(() => {
     socket.on('new-log', (newLog) => {
-      // ব্যাকএন্ড অলরেডি ফিল্টার করে পাঠাচ্ছে, তাই চেক করার দরকার নেই
       setLogs((prevLogs) => [newLog, ...prevLogs])
     })
 
-    // ক্লিনআপ
     return () => {
       socket.off('new-log');
       socket.disconnect();
@@ -80,7 +69,6 @@ function App() {
   }, [])
 
 
-  // 🧠 ডেটা প্রসেসিং: Team অনুযায়ী গ্রুপ করা
   const teamStats = logs.reduce((acc, log) => {
     const parts = log.participant_id.split(' - ');
     const teamName = parts[0] || 'Unknown_Team';
